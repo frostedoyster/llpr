@@ -1,0 +1,3 @@
+- Make Jacobian faster for PR, splitting it into a scriptable and non-scriptable functions
+- Enable tests for it
+- Restructure __init__() into __init__() and set_model() so that the state dict can be loaded more easily
