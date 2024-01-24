@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 
-from llpr.utils.metrics import avg_nll_regression, avg_nll_classification
+from llpr.utils.metrics import avg_nll_regression
 from llpr.utils.validation_opt import validation_opt
 
 
@@ -11,13 +11,8 @@ def _hook(module, input: Tuple[torch.Tensor], output) -> Tuple[torch.Tensor, tor
     return output, input[0]
 
 class UncertaintyModel(torch.nn.Module):
-    def __init__(self, model, last_layer, train_loader=None, mode="classification"):
+    def __init__(self, model, last_layer, train_loader=None):
         super().__init__()
-        self.mode = mode
-        if mode == "classification":
-            self.n_samples = 1000  # hardcoded for now. TODO: make this a parameter
-        else:
-            self.n_samples = -1
 
         # we are going to register a forward hook on the last layer
         # and we don't want to modify the original model, so the user
@@ -80,25 +75,8 @@ class UncertaintyModel(torch.nn.Module):
         # Using torch.linalg.solve:
         # uncertainty = (torch.linalg.solve(self.covariance, hidden_features.T).T * hidden_features).sum(dim=1, keepdim=True)
         uncertainty = torch.einsum("ij, jk, ik -> i", hidden_features, self.inv_covariance, hidden_features)
-        if self.mode == "regression":
-            return prediction, uncertainty
-        elif self.mode == "classification":
-            return prediction, uncertainty
-            # means = prediction
-            # covariances = uncertainty.repeat(1, means.shape[1])
-            # stds = torch.sqrt(covariances)  # calculate standard deviations
-            # sampler = torch.distributions.Normal(means, stds)
-            # samples = sampler.sample((self.n_samples,))
-            # # Average argmax over samples
-            # bool_argmax = torch.argmax(samples, dim=-1, keepdim=True) == torch.arange(means.shape[1], device=samples.device).unsqueeze(0).unsqueeze(0)
-            # result = torch.mean(bool_argmax.to(samples.dtype), dim=0)
-
-            # # # Average probabilities over samples
-            # # samples = torch.softmax(samples, dim=-1)
-            # # result = torch.mean(samples, dim=0)  # average probabilities over samples
-            # return result
-        else:
-            raise RuntimeError(f"Invalid mode: {self.mode}.")
+        
+        return prediction, uncertainty
 
     def set_hyperparameters(self, C, sigma):
         if not self.has_covariance:
@@ -108,13 +86,7 @@ class UncertaintyModel(torch.nn.Module):
         C = float(C)
         sigma = float(sigma)
         self.inv_covariance = C * torch.linalg.inv(self.covariance + sigma**2 * torch.eye(self.hidden_size, device=self.covariance.device, dtype=torch.float64)).to(self.covariance.dtype)
-        # torch.cholesky_inverse(self.covariance.to(torch.float64) + sigma**2 * torch.eye(self.hidden_size, dtype=torch.float64, device=self.covariance.device)).to(self.covariance.dtype)
         self.hypers_are_set = True
 
     def optimize_hyperparameters(self, validation_dataloader, device=None):
-        if self.mode == "regression":
-            validation_opt(self, validation_dataloader, avg_nll_regression, 2, device=device)
-        elif self.mode == "classification":
-            validation_opt(self, validation_dataloader, avg_nll_classification, 2, device=device)
-        else:
-            raise RuntimeError(f"Invalid mode: {self.mode}.")
+        validation_opt(self, validation_dataloader, avg_nll_regression, 2, device=device)

@@ -3,8 +3,8 @@ from sklearn.datasets import fetch_california_housing
 import numpy as np
 import torch
 
-np.random.seed(12)
-torch.manual_seed(12)
+np.random.seed(0)
+torch.manual_seed(0)
 
 
 data = fetch_california_housing()
@@ -66,7 +66,7 @@ test_dataset = torch.utils.data.TensorDataset(X_test_id, y_test_id)
 ood_test_dataset = torch.utils.data.TensorDataset(X_test_ood, y_test_ood)
 
 n_layers = 2
-n_neurons_per_layer = 64
+n_neurons_per_layer = 32
 
 model = torch.nn.Sequential(
     torch.nn.Linear(X_train.shape[1], n_neurons_per_layer),
@@ -88,81 +88,83 @@ ood_test_dataloader = torch.utils.data.DataLoader(ood_test_dataset, batch_size=1
 
 n_epochs = 400
 loss_fn = torch.nn.functional.mse_loss
-optimizer = torch.optim.AdamW(model.parameters())
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
 
 from llpr import UncertaintyModel
 from llpr.utils.train_tensor_inputs import train_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
-# train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
+train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
 
-with torch.no_grad():
-    y_pred = model(X_valid.to(device))
-    valid_loss = torch.nn.functional.mse_loss(y_pred, y_valid.to(device)).item()
-    print(f"Before training: Valid loss: {valid_loss:.4f}")
+# with torch.no_grad():
+#     y_pred = model(X_valid.to(device))
+#     valid_loss = torch.nn.functional.mse_loss(y_pred, y_valid.to(device)).item()
+#     print(f"Before training: Valid loss: {valid_loss:.4f}")
 
-best_model = None
-best_valid_loss = float("inf")
-for epoch in range(n_epochs):
-    for X_batch, y_batch in train_dataloader:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        y_pred = model(X_batch)
-        loss = torch.nn.functional.mse_loss(y_pred, y_batch)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-    if epoch % 10 == 0:
-        print(f"Epoch: {epoch}")
+# best_model = None
+# best_valid_loss = float("inf")
+# for epoch in range(n_epochs):
+#     for X_batch, y_batch in train_dataloader:
+#         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+#         y_pred = model(X_batch)
+#         loss = torch.nn.functional.mse_loss(y_pred, y_batch)
+#         optimizer.zero_grad()
+#         loss.backward()
+#         optimizer.step()
+#     if epoch % 10 == 0:
+#         print(f"Epoch: {epoch}")
 
-model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader, mode="regression")
+model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
 model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device)
-# model_with_uncertainty.set_hyperparameters(25.0, 1.0)
 
-from tqdm import tqdm
+def get_estimated_and_actual_variances(dataloader):
+    estimated_variances = []
+    actual_variances = []
+    with torch.no_grad():
+        for X_batch, y_batch in dataloader:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            y_pred, var_pred = model_with_uncertainty(X_batch)
+            actual_variances.append((y_pred - y_batch) ** 2)
+            estimated_variances.append(var_pred)
+    estimated_variances = torch.cat(estimated_variances, dim=0)
+    actual_variances = torch.cat(actual_variances, dim=0)
 
-estimated_variances = []
-actual_variances = []
-with torch.no_grad():
-    for X_batch, y_batch in tqdm(test_dataloader):
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        y_pred, var_pred = model_with_uncertainty(X_batch)
-        actual_variances.append((y_pred - y_batch) ** 2)
-        estimated_variances.append(var_pred)
-estimated_variances = torch.cat(estimated_variances, dim=0)
-actual_variances = torch.cat(actual_variances, dim=0)
+    estimated_variances = estimated_variances.cpu().numpy()
+    actual_variances = actual_variances.cpu().numpy()
 
-estimated_variances_ood = []
-actual_variances_ood = []
-with torch.no_grad():
-    for X_batch, y_batch in tqdm(ood_test_dataloader):
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        y_pred, var_pred = model_with_uncertainty(X_batch)
-        actual_variances_ood.append((y_pred - y_batch) ** 2)
-        estimated_variances_ood.append(var_pred)
-estimated_variances_ood = torch.cat(estimated_variances_ood, dim=0)
-actual_variances_ood = torch.cat(actual_variances_ood, dim=0)
+    return estimated_variances, actual_variances
 
-estimated_variances = estimated_variances.cpu().numpy()
-actual_variances = actual_variances.cpu().numpy()
-
-estimated_variances_ood = estimated_variances_ood.cpu().numpy()
-actual_variances_ood = actual_variances_ood.cpu().numpy()
+estimated_variances_valid, actual_variances_valid = get_estimated_and_actual_variances(valid_dataloader)
+estimated_variances_test, actual_variances_test = get_estimated_and_actual_variances(test_dataloader)
+estimated_variances_ood, actual_variances_ood = get_estimated_and_actual_variances(ood_test_dataloader)
 
 n_per_bin = 100
 
-sorting = np.argsort(estimated_variances)
-estimated_variances = estimated_variances[sorting]
-actual_variances = actual_variances[sorting]
+sorting = np.argsort(estimated_variances_valid)
+estimated_variances_valid = estimated_variances_valid[sorting]
+actual_variances_valid = actual_variances_valid[sorting]
 
-bins = np.arange(0, len(estimated_variances), n_per_bin)
-estimated_variances_avg = np.array([np.mean(estimated_variances[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
-actual_variances_avg = np.array([np.mean(actual_variances[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
+bins = np.arange(0, len(estimated_variances_valid), n_per_bin)
+estimated_variances_valid_avg = np.array([np.mean(estimated_variances_valid[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
+actual_variances_valid_avg = np.array([np.mean(actual_variances_valid[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
 
 # Warn about the fact that the last bin is not full:
 print(f"Other bins contain {n_per_bin} elements.")
-print(f"The last bin contains only {len(estimated_variances) - bins[-1]} elements.")
+print(f"The last bin contains only {len(estimated_variances_valid) - bins[-1]} elements.")
+
+sorting = np.argsort(estimated_variances_test)
+estimated_variances_test = estimated_variances_test[sorting]
+actual_variances_test = actual_variances_test[sorting]
+
+bins = np.arange(0, len(estimated_variances_test), n_per_bin)
+estimated_variances_test_avg = np.array([np.mean(estimated_variances_test[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
+actual_variances_test_avg = np.array([np.mean(actual_variances_test[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
+
+# Warn about the fact that the last bin is not full:
+print(f"Other bins contain {n_per_bin} elements.")
+print(f"The last bin contains only {len(estimated_variances_test) - bins[-1]} elements.")
 
 sorting = np.argsort(estimated_variances_ood)
 estimated_variances_ood = estimated_variances_ood[sorting]
@@ -178,14 +180,21 @@ print(f"The last bin contains only {len(estimated_variances_ood) - bins[-1]} ele
 
 import matplotlib.pyplot as plt
 
-min_value = min(np.min(estimated_variances_avg), np.min(actual_variances_avg), np.min(estimated_variances_ood_avg), np.min(actual_variances_ood_avg))
-max_value = max(np.max(estimated_variances_avg), np.max(actual_variances_avg), np.max(estimated_variances_ood_avg), np.max(actual_variances_ood_avg))
+min_value = min(np.min(estimated_variances_test_avg), np.min(actual_variances_test_avg), np.min(estimated_variances_ood_avg), np.min(actual_variances_ood_avg))
+max_value = max(np.max(estimated_variances_test_avg), np.max(actual_variances_test_avg), np.max(estimated_variances_ood_avg), np.max(actual_variances_ood_avg))
 
-plt.plot(estimated_variances_avg, actual_variances_avg, "o")
 plt.plot([min_value, max_value], [min_value, max_value], "k--")
+print(estimated_variances_valid_avg.shape)
+print(actual_variances_valid_avg.shape)
+print(estimated_variances_test_avg.shape)
+print(actual_variances_test_avg.shape)
+print(estimated_variances_ood_avg.shape)
+print(actual_variances_ood_avg.shape)
+# plt.plot(estimated_variances_valid_avg, actual_variances_valid_avg, "o")
+plt.plot(estimated_variances_test_avg, actual_variances_test_avg, "o")
 plt.plot(estimated_variances_ood_avg, actual_variances_ood_avg, "o")
 plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("Estimated variance")
 plt.ylabel("Actual variance")
-plt.savefig("outputs/figures/ood_cali_400_auto.pdf")
+plt.savefig("outputs/figures/ood_cali.pdf")
