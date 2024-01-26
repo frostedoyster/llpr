@@ -52,7 +52,8 @@ state_dict = torch.load("outputs/models/qm9.pt")
 model.load_state_dict(state_dict)
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.set_hyperparameters(30.0, 0.001)
+model_with_uncertainty.optimize_hyperparameters(valid_dataloader)
+# model_with_uncertainty.set_hyperparameters(30.0, 0.1)
 
 import tqdm
 
@@ -103,4 +104,4 @@ plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("Predicted variance")
 plt.ylabel("Actual variance")
-plt.savefig("outputs/figures/qm9.pdf")
+plt.savefig("qm9.pdf")

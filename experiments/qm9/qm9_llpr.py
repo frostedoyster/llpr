@@ -66,6 +66,7 @@ class UncertaintyModel(torch.nn.Module):
         self.has_covariance = True
 
     def forward(self, x):
+        x = list(x)  # make sure we have a list, and not a tuple for example
         prediction, hidden_features = self.model(x)
         if self.last_layer_has_bias:
             hidden_features = torch.cat((hidden_features, torch.ones_like(hidden_features[:, :1])), dim=1)

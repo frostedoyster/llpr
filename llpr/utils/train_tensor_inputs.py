@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import copy
 
+from .to_device import to_device
+
 
 def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataloader, n_epochs, device):
 
@@ -9,8 +11,9 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
         with torch.no_grad():
             y_pred, y_actual = [], []
             for batch in dataloader:
-                X_batch, y_batch = batch
-                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                X_batch = batch[:-1]
+                y_batch = batch[-1]
+                X_batch, y_batch = to_device(device, X_batch, y_batch)
                 y_pred_batch = model(X_batch)
                 y_pred.append(y_pred_batch)
                 y_actual.append(y_batch)
@@ -34,8 +37,9 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
         model.train()
         for batch in train_dataloader:
             optimizer.zero_grad()
-            X_batch, y_batch = batch
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            X_batch = batch[:-1]
+            y_batch = batch[-1]
+            X_batch, y_batch = to_device(device, X_batch, y_batch)
             y_pred = model(X_batch)
             loss = loss_fn(y_pred, y_batch)
             loss.backward()

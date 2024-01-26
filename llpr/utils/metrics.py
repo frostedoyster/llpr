@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
+from .to_device import to_device
+
 
 def avg_nll_regression(model, dataloader, device=None, train_mean_y=0.0, train_std_y=1.0):
     # calculates a NLL on a dataset
@@ -9,8 +11,9 @@ def avg_nll_regression(model, dataloader, device=None, train_mean_y=0.0, train_s
     total_nll = 0.0
     total_datapoints = 0
     for batch in dataloader:
-        x, y = batch
-        x, y = x.to(device), y.to(device)
+        x = batch[:-1]
+        y = batch[-1]
+        x, y = to_device(device, x, y)
         y = y * train_std_y + train_mean_y
         predictions, estimated_variances = model(x)
         predictions = predictions * train_std_y + train_mean_y
@@ -29,8 +32,9 @@ def rmse(model, dataloader, device=None, train_mean_y=0.0, train_std_y=1.0):
     total_se = 0.0
     total_datapoints = 0
     for batch in dataloader:
-        x, y = batch
-        x, y = x.to(device), y.to(device)
+        x = batch[:-1]
+        y = batch[-1]
+        x, y = to_device(device, x, y)
         y = y * train_std_y + train_mean_y
         predictions, estimated_variances = model(x)
         predictions = predictions * train_std_y + train_mean_y
@@ -49,8 +53,9 @@ def mae(model, dataloader, device=None):
     total_ae = 0.0
     total_datapoints = 0
     for batch in dataloader:
-        x, y = batch
-        x, y = x.to(device), y.to(device)
+        x = batch[:-1]
+        y = batch[-1]
+        x, y = to_device(device, x, y)
         predictions, estimated_variances = model(x)
         total_datapoints += len(x)
         total_ae += (

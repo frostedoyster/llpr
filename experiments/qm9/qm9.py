@@ -11,6 +11,7 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu"
 batch_size = 32
 n_epochs = 300
 
@@ -32,7 +33,7 @@ model = torch.nn.Sequential(
 ).to(device)
 
 loss_fn = torch.nn.MSELoss()  # mean square error
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.AdamW(model.parameters())
 
 train_dataset, valid_dataset, test_dataset = get_dataset()
 

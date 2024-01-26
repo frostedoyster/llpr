@@ -3,8 +3,9 @@ from typing import Tuple
 
 import torch
 
-from llpr.utils.metrics import avg_nll_regression
-from llpr.utils.validation_opt import validation_opt
+from .utils.metrics import avg_nll_regression
+from .utils.validation_opt import validation_opt
+from .utils.to_device import to_device
 
 
 def _hook(module, input: Tuple[torch.Tensor], output) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -56,8 +57,9 @@ class UncertaintyModel(torch.nn.Module):
 
         with torch.no_grad():
             for batch in train_loader:
-                x, y = batch
-                x, y = x.to(next(model.parameters()).device), y.to(next(model.parameters()).device)
+                x = batch[:-1]
+                y = batch[-1]
+                x, y = to_device(next(self.model.parameters()).device, x, y)
                 y_predicted, hidden_features = self.model(x)
                 if self.last_layer_has_bias:
                     hidden_features = torch.cat((hidden_features, torch.ones_like(hidden_features[:, :1])), dim=1)
@@ -85,7 +87,7 @@ class UncertaintyModel(torch.nn.Module):
         # Utility function to set the hyperparameters of the uncertainty model.
         C = float(C)
         sigma = float(sigma)
-        self.inv_covariance = C * torch.linalg.inv(self.covariance + sigma**2 * torch.eye(self.hidden_size, device=self.covariance.device, dtype=torch.float64)).to(self.covariance.dtype)
+        self.inv_covariance = C * torch.linalg.inv(self.covariance + sigma**2 * torch.eye(self.hidden_size, device=self.covariance.device))
         self.hypers_are_set = True
 
     def optimize_hyperparameters(self, validation_dataloader, device=None):
