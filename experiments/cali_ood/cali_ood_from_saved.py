@@ -98,13 +98,13 @@ from llpr.utils.train_tensor_inputs import train_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
-train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
-# save
-torch.save(model.state_dict(), f"outputs/models/cali_ood_{n_neurons_per_layer}.pt")
+# load
+model.load_state_dict(torch.load(f"outputs/models/cali_ood_{n_neurons_per_layer}.pt"))
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device)
+model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device, objective="ssl")
+# model_with_uncertainty.set_hyperparameters(80.0, 10.0)
 
 def get_estimated_and_actual_variances(dataloader):
     estimated_variances = []

@@ -48,7 +48,7 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, collate_fn=collate_fn)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, collate_fn=collate_fn)
 
-state_dict = torch.load("outputs/models/qm9.pt")
+state_dict = torch.load("outputs/models/qm9_50000.pt")
 model.load_state_dict(state_dict)
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
@@ -72,7 +72,7 @@ estimated_errors = torch.concatenate(estimated_errors).squeeze(1)
 actual_errors = actual_errors.cpu().numpy()
 estimated_errors = estimated_errors.cpu().numpy()
 
-n_samples_per_bin = 100
+n_samples_per_bin = 1000
 n_sigma = 1.0
 
 def split_array(array, size):

@@ -16,8 +16,8 @@ batch_size = 32
 n_epochs = 300
 
 # Define the model
-n_neurons = 256
-n_neurons_last_layer = 256
+n_neurons = 128
+n_neurons_last_layer = 128
 activation = torch.nn.SiLU()
 all_species = [1, 6, 7, 8, 9]
 n_species = len(all_species)
@@ -51,7 +51,7 @@ test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_siz
 
 train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
-torch.save(model.state_dict(), "outputs/models/qm9.pt")
+torch.save(model.state_dict(), "outputs/models/qm9_10000_one_layernorm.pt")
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
 model_with_uncertainty.set_hyperparameters(1.0, 0.001)

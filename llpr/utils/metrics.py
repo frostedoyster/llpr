@@ -12,6 +12,7 @@ def avg_nll_regression(model, dataloader, device=None, train_mean_y=0.0, train_s
     total_datapoints = 0
     for batch in dataloader:
         x = batch[:-1]
+        if len(x) == 1: x = x[0]
         y = batch[-1]
         x, y = to_device(device, x, y)
         y = y * train_std_y + train_mean_y
@@ -26,6 +27,58 @@ def avg_nll_regression(model, dataloader, device=None, train_mean_y=0.0, train_s
     return total_nll / total_datapoints
 
 
+def sum_squared_log(model, dataloader, device=None):
+
+    actual_errors = []
+    predicted_errors = []
+    for batch in dataloader:
+        x = batch[:-1]
+        if len(x) == 1: x = x[0]
+        y = batch[-1]
+        x, y = to_device(device, x, y)
+        predictions, estimated_variances = model(x)
+        actual_errors.append((y-predictions)**2)
+        predicted_errors.append(estimated_variances)
+    actual_errors = torch.cat(actual_errors)
+    predicted_errors = torch.cat(predicted_errors)
+
+    sort_indices = torch.argsort(predicted_errors)
+    actual_errors = actual_errors[sort_indices]
+    predicted_errors = predicted_errors[sort_indices]
+
+    n_samples_per_bin = 100
+    n_samples = len(actual_errors)
+
+    actual_error_bins = []
+    predicted_error_bins = []
+
+    # skip the last bin, which will most likely be incomplete
+    for i_bin in range(n_samples // n_samples_per_bin - 1):
+        actual_error_bins.append(
+            actual_errors[i_bin*n_samples_per_bin:(i_bin+1)*n_samples_per_bin]
+        )
+        predicted_error_bins.append(
+            predicted_errors[i_bin*n_samples_per_bin:(i_bin+1)*n_samples_per_bin]
+        )
+    
+    actual_error_bins = torch.stack(actual_error_bins)
+    predicted_error_bins = torch.stack(predicted_error_bins)
+
+    # calculate means:
+    actual_error_means = actual_error_bins.mean(dim=1)
+    predicted_error_means = predicted_error_bins.mean(dim=1)
+
+    # calculate squared log errors:
+    squared_log_errors = (
+        torch.log(actual_error_means / predicted_error_means)**2
+    )
+
+    # calculate the sum of squared log errors:
+    sum_squared_log = squared_log_errors.sum().item()
+
+    return sum_squared_log
+
+
 def rmse(model, dataloader, device=None, train_mean_y=0.0, train_std_y=1.0):
     # calculates a RMSE on a dataset
 
@@ -33,6 +86,7 @@ def rmse(model, dataloader, device=None, train_mean_y=0.0, train_std_y=1.0):
     total_datapoints = 0
     for batch in dataloader:
         x = batch[:-1]
+        if len(x) == 1: x = x[0]
         y = batch[-1]
         x, y = to_device(device, x, y)
         y = y * train_std_y + train_mean_y
@@ -54,6 +108,7 @@ def mae(model, dataloader, device=None):
     total_datapoints = 0
     for batch in dataloader:
         x = batch[:-1]
+        if len(x) == 1: x = x[0]
         y = batch[-1]
         x, y = to_device(device, x, y)
         predictions, estimated_variances = model(x)

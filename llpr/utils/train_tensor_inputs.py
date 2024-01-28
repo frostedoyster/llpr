@@ -12,6 +12,7 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
             y_pred, y_actual = [], []
             for batch in dataloader:
                 X_batch = batch[:-1]
+                if len(X_batch) == 1: X_batch = X_batch[0]
                 y_batch = batch[-1]
                 X_batch, y_batch = to_device(device, X_batch, y_batch)
                 y_pred_batch = model(X_batch)
@@ -38,6 +39,7 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
         for batch in train_dataloader:
             optimizer.zero_grad()
             X_batch = batch[:-1]
+            if len(X_batch) == 1: X_batch = X_batch[0]
             y_batch = batch[-1]
             X_batch, y_batch = to_device(device, X_batch, y_batch)
             y_pred = model(X_batch)

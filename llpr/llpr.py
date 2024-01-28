@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 
-from .utils.metrics import avg_nll_regression
+from .utils.metrics import avg_nll_regression, sum_squared_log
 from .utils.validation_opt import validation_opt
 from .utils.to_device import to_device
 
@@ -58,6 +58,7 @@ class UncertaintyModel(torch.nn.Module):
         with torch.no_grad():
             for batch in train_loader:
                 x = batch[:-1]
+                if len(x) == 1: x = x[0]
                 y = batch[-1]
                 x, y = to_device(next(self.model.parameters()).device, x, y)
                 y_predicted, hidden_features = self.model(x)
@@ -90,5 +91,10 @@ class UncertaintyModel(torch.nn.Module):
         self.inv_covariance = C * torch.linalg.inv(self.covariance + sigma**2 * torch.eye(self.hidden_size, device=self.covariance.device))
         self.hypers_are_set = True
 
-    def optimize_hyperparameters(self, validation_dataloader, device=None):
-        validation_opt(self, validation_dataloader, avg_nll_regression, 2, device=device)
+    def optimize_hyperparameters(self, validation_dataloader, device=None, objective="ssl"):
+        if objective == "ssl":
+            validation_opt(self, validation_dataloader, sum_squared_log, 2, device=device)
+        elif objective == "nll":
+            validation_opt(self, validation_dataloader, avg_nll_regression, 2, device=device)
+        else:
+            raise ValueError("objective should be 'ssl' or 'nll'")
