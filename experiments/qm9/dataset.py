@@ -9,8 +9,8 @@ def get_dataset():
 
     structures = ase.io.read("data/qm9.xyz", ":")
     np.random.shuffle(structures)
-    n_train = 50000
-    n_valid = 5000
+    n_train = 10000
+    n_valid = 10000
     # the rest is for testing
 
     train_structures = structures[:n_train]

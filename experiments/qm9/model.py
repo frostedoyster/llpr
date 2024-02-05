@@ -42,9 +42,11 @@ class FeatureCalculator(torch.nn.Module):
 
     def forward(self, structures):
         structures = rascaline.torch.systems_to_torch(structures)
+        structures = [structure.to(torch.get_default_dtype()) for structure in structures]
         features = self.feature_calculator(structures)
         features = features.keys_to_properties(self.neighbor_labels_1)
         features = features.keys_to_properties(self.neighbor_labels_2)
+        features = features.to(torch.get_default_dtype())
         # convert features to a dictionary
         # we also need a dictionary to store their structure number
         features_as_dict = {}

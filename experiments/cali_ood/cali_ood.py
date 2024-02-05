@@ -16,8 +16,8 @@ permutation = torch.tensor(np.random.permutation(number_of_data), dtype=torch.in
 features = features[permutation]
 targets = targets[permutation]
 
-n_train = 4 * number_of_data // 10
-n_valid = number_of_data // 10
+n_train = 6 * number_of_data // 10
+n_valid = 2 * number_of_data // 10
 n_test = number_of_data - n_train
 
 X_train = features[:n_train]
@@ -66,10 +66,7 @@ test_dataset = torch.utils.data.TensorDataset(X_test_id, y_test_id)
 ood_test_dataset = torch.utils.data.TensorDataset(X_test_ood, y_test_ood)
 
 n_layers = 2
-
-# Set the neurons per layer from outside:
-import sys
-n_neurons_per_layer = int(sys.argv[1])
+n_neurons_per_layer = 32
 
 model = torch.nn.Sequential(
     torch.nn.Linear(X_train.shape[1], n_neurons_per_layer),
@@ -101,7 +98,7 @@ model.to(device)
 train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
 # save
-torch.save(model.state_dict(), f"outputs/models/cali_ood_{n_neurons_per_layer}.pt")
+torch.save(model.state_dict(), f"outputs/models/cali_ood.pt")
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
 model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device)
@@ -127,7 +124,7 @@ estimated_variances_valid, actual_variances_valid = get_estimated_and_actual_var
 estimated_variances_test, actual_variances_test = get_estimated_and_actual_variances(test_dataloader)
 estimated_variances_ood, actual_variances_ood = get_estimated_and_actual_variances(ood_test_dataloader)
 
-n_per_bin = 100
+n_per_bin = 50
 
 sorting = np.argsort(estimated_variances_valid)
 estimated_variances_valid = estimated_variances_valid[sorting]
@@ -185,4 +182,4 @@ plt.yscale("log")
 plt.xlabel("Estimated variance")
 plt.ylabel("Actual variance")
 plt.legend()
-plt.savefig(f"outputs/figures/ood_cali_{n_neurons_per_layer}.pdf")
+plt.savefig(f"outputs/figures/ood_cali.pdf")

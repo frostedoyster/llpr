@@ -6,18 +6,19 @@ from model import FeatureCalculator, AtomicNNs, SumAtomsModule
 from train import train_model
 from qm9_llpr import UncertaintyModel
 
+print("Start")
+
 torch.set_default_dtype(torch.float64)
 torch.manual_seed(0)
 np.random.seed(0)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
 batch_size = 32
 n_epochs = 300
 
 # Define the model
-n_neurons = 128
-n_neurons_last_layer = 128
+n_neurons = 64
+n_neurons_last_layer = 64
 activation = torch.nn.SiLU()
 all_species = [1, 6, 7, 8, 9]
 n_species = len(all_species)
@@ -51,10 +52,10 @@ test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_siz
 
 train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
-torch.save(model.state_dict(), "outputs/models/qm9_10000_one_layernorm.pt")
+torch.save(model.state_dict(), "outputs/models/qm9_10000_64_manylayernorm.pt")
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.set_hyperparameters(1.0, 0.001)
+model_with_uncertainty.optimize_hyperparameters(valid_dataloader)
 
 import tqdm
 
@@ -68,8 +69,8 @@ with torch.no_grad():
         actual_errors.append(
             (prediction-result)**2
         )
-actual_errors = torch.concatenate(actual_errors)
-estimated_errors = torch.concatenate(estimated_errors)
+actual_errors = torch.concatenate(actual_errors).squeeze(1)
+estimated_errors = torch.concatenate(estimated_errors).squeeze(1)
 actual_errors = actual_errors.cpu().numpy()
 estimated_errors = estimated_errors.cpu().numpy()
 
@@ -98,9 +99,9 @@ actual_averages = np.array([np.mean(split_actual_single) for split_actual_single
 import matplotlib.pyplot as plt
 plt.plot(estimated_averages, actual_averages, ".", markersize=4.0)
 plt.plot([0.0, np.max(estimated_averages)], [0.0, np.max(estimated_averages)], color="tab:orange", label="y=x")
-plt.fill_between([0.0, np.max(estimated_averages)], [0.0, np.max(estimated_averages)+n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], [0.0, np.max(estimated_averages)-n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], alpha=0.3, color="tab:orange")
+# plt.fill_between([0.0, np.max(estimated_averages)], [0.0, np.max(estimated_averages)+n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], [0.0, np.max(estimated_averages)-n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], alpha=0.3, color="tab:orange")
 plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("Predicted errors")
 plt.ylabel("Actual errors")
-plt.savefig("outputs/figures/qm9.pdf")
+plt.savefig("outputs/figures/qm9_10000_64_manylayernorm.pdf")

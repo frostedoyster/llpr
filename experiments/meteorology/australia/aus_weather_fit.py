@@ -7,7 +7,7 @@ np.random.seed(0)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-data = pd.read_csv('weatherAUS_processed.csv')
+data = pd.read_csv('data/weatherAUS_processed.csv')
 locations, features, targets = data['Location'], data.drop(['Location', 'NextDayMaxTemp'], axis=1), data['NextDayMaxTemp']
 
 locations = torch.tensor(locations, dtype=torch.int64)
@@ -19,9 +19,14 @@ locations = locations[permutation]
 features = features[permutation]
 targets = targets[permutation]
 
-n_train = 5 * number_of_data // 10
-n_valid = number_of_data // 10
-n_test = number_of_data - n_train
+import sys
+n_neurons = int(sys.argv[1])
+training_set_fraction = int(sys.argv[2])
+
+valid_set_fraction = (10 - training_set_fraction) // 2
+
+n_train = training_set_fraction * number_of_data // 10
+n_valid = valid_set_fraction * number_of_data // 10
 
 l_train = locations[:n_train]
 l_valid = locations[n_train:n_train+n_valid]
@@ -46,8 +51,9 @@ test_dataset = torch.utils.data.TensorDataset(l_test, X_test, y_test)
 
 n_layers = 2
 n_features = X_train.shape[1]
-n_neurons_embedding = 64
-n_neurons_per_layer = 64
+
+n_neurons_embedding = n_neurons
+n_neurons_per_layer = n_neurons
 
 class FirstLayer(torch.nn.Module):
     def __init__(self, n_neurons_embedding):
@@ -93,8 +99,7 @@ train_model(model, optimizer, torch.nn.functional.mse_loss, train_dataloader, va
 from llpr import UncertaintyModel
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.set_hyperparameters(18000.0, 120.0)
-# model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device)
+model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device)
 
 # covariance = 0.0001*features_last_layer.T @ features_last_layer + 0.5 * torch.eye(features_last_layer.shape[1], device=features_last_layer.device)
 
@@ -121,9 +126,10 @@ bins = np.arange(0, len(estimated_variances), n_per_bin)
 estimated_variances_avg = np.array([np.mean(estimated_variances[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
 actual_variances_avg = np.array([np.mean(actual_variances[bins[i] : bins[i + 1]]) for i in range(len(bins) - 1)])
 
-# Warn about the fact that the last bin is not full:
-print(f"Other bins contain {n_per_bin} elements.")
-print(f"The last bin contains only {len(estimated_variances) - bins[-1]} elements.")
+# Remove the last bin if it is not full
+if len(estimated_variances) % n_per_bin != 0:
+    estimated_variances_avg = estimated_variances_avg[:-1]
+    actual_variances_avg = actual_variances_avg[:-1]
 
 import matplotlib.pyplot as plt
 
@@ -137,4 +143,4 @@ plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("Estimated variance")
 plt.ylabel("Actual variance")
-plt.savefig("outputs/figures/weatherAUS.pdf")
+plt.savefig(f"outputs/figures/weatherAUS_{n_neurons}_{training_set_fraction}.pdf")

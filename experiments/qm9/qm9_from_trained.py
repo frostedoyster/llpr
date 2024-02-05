@@ -6,7 +6,7 @@ from model import FeatureCalculator, AtomicNNs, SumAtomsModule
 from train import train_model
 from qm9_llpr import UncertaintyModel
 
-torch.set_default_dtype(torch.float64)
+# torch.set_default_dtype(torch.float64)
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -15,8 +15,8 @@ batch_size = 32
 n_epochs = 500
 
 # Define the model
-n_neurons = 256
-n_neurons_last_layer = 256
+n_neurons = 128
+n_neurons_last_layer = 128
 activation = torch.nn.SiLU()
 all_species = [1, 6, 7, 8, 9]
 n_species = len(all_species)
@@ -30,9 +30,6 @@ model = torch.nn.Sequential(
     SumAtomsModule(all_species, n_neurons_last_layer),
     torch.nn.Linear(n_species*n_neurons_last_layer, 1, bias=False),
 ).to(device)
-
-loss_fn = torch.nn.MSELoss()  # mean square error
-optimizer = torch.optim.Adam(model.parameters())
 
 train_dataset, valid_dataset, test_dataset = get_dataset()
 
@@ -48,7 +45,7 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, collate_fn=collate_fn)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, collate_fn=collate_fn)
 
-state_dict = torch.load("outputs/models/qm9_50000.pt")
+state_dict = torch.load("outputs/models/qm9_10000_one_layernorm.pt")
 model.load_state_dict(state_dict)
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)

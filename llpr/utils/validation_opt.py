@@ -4,6 +4,7 @@
 import torch
 import numpy as np
 from scipy.optimize import brute
+import math
 
 
 def process_inputs(x):
@@ -23,12 +24,15 @@ def validation_opt(model, validation_loader, objective_function, n_parameters, *
             objective_function_value = objective_function(model, validation_loader, **kwargs)
         except torch._C._LinAlgError:
             objective_function_value = 1e10
+        # HACK:
+        if math.isnan(objective_function_value):
+            objective_function_value = 1e10
         print(x, objective_function_value)
         return objective_function_value
 
     assert n_parameters == 2
 
-    result = brute(objective_function_wrapper, ranges=[slice(-5, 5, 1.0), slice(-5, 5, 1.0)])
+    result = brute(objective_function_wrapper, ranges=[slice(-5, 5, 0.25), slice(-5, 5, 0.25)])
     print("Optimal parameters:", process_inputs(result))
     # print("Optimal value:", result.fval)
 

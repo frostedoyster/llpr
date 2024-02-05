@@ -31,7 +31,7 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
 
     best_valid_loss = np.inf
     best_train_loss = np.inf
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=50, min_lr=1e-6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=100, min_lr=1e-6)
 
     # Training loop
     for epoch in range(1, n_epochs+1):
