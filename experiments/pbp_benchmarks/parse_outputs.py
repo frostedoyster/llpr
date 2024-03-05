@@ -4,10 +4,13 @@ import numpy as np
 with open(f"results.out", "w") as f:
     f.write("")
 
-for dataset in ["cali", "concrete", "energy", "kin8nm", "naval", "power", "protein", "wine", "yacht", "year"]:
+for dataset in ["concrete", "energy", "kin8nm", "naval", "power", "protein", "wine", "yacht", "year"]:
     rmses = []
     nlls = []
-    for seed in range(5):
+    n_seeds = 20
+    if dataset == "protein": n_seeds = 5
+    if dataset == "year": n_seeds = 1
+    for seed in range(n_seeds):
         with open(f"outputs/llpr_{dataset}_{seed}.out", "r") as f:
             lines = f.readlines()
             rmse = float(lines[-1].split(" ")[-1])

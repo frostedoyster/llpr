@@ -14,7 +14,7 @@ def _hook(module, input: Tuple[torch.Tensor], output) -> Tuple[torch.Tensor, tor
     return output, input[0]
 
 class UncertaintyModel(torch.nn.Module):
-    def __init__(self, model, last_layer, train_loader=None):
+    def __init__(self, model, last_layer, train_loader=None, exponent=0.0):
         super().__init__()
 
         # do not deepcopy: the rascaline.torch calculator can't handle it
@@ -60,6 +60,8 @@ class UncertaintyModel(torch.nn.Module):
                 x, y = batch
                 # x, y = x.to(next(model.parameters()).device), y.to(next(model.parameters()).device)
                 y_predicted, hidden_features = self.model(x)
+                n_atoms = torch.tensor([len(structures.positions) for structures in x], device=next(model.parameters()).device).unsqueeze(1)
+                hidden_features = hidden_features / (n_atoms**exponent)
                 if self.last_layer_has_bias:
                     hidden_features = torch.cat((hidden_features, torch.ones_like(hidden_features[:, :1])), dim=1)
                 self.covariance += hidden_features.T @ hidden_features

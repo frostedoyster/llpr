@@ -13,9 +13,8 @@ np.random.seed(0)
 import sys
 n_exp = int(sys.argv[1])
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-batch_size = 32
-n_epochs = 500
+device = "cuda"
+batch_size = 8
 
 # Define the model
 n_neurons = 64
@@ -52,24 +51,25 @@ state_dict = torch.load(f"outputs/models/qm9_{n_exp}.pt")
 model.load_state_dict(state_dict)
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader, n_exp)
-model_with_uncertainty.optimize_hyperparameters(valid_dataloader)
+model_with_uncertainty.set_hyperparameters(0.1, 0.1)  # won't matter for timings
 
+import time
 import tqdm
 
-estimated_variances = []
-actual_variances = []
-with torch.no_grad():
-    for batch in tqdm.tqdm(test_dataloader):
-        input, result = batch 
-        prediction, uncertainty = model_with_uncertainty(input)
-        estimated_variances.append(uncertainty)
-        actual_variances.append(
-            (prediction-result)**2
-        )
-actual_variances = torch.concatenate(actual_variances).squeeze(1)
-estimated_variances = torch.concatenate(estimated_variances).squeeze(1)
-actual_variances = actual_variances.cpu().numpy()
-estimated_variances = estimated_variances.cpu().numpy()
+total_time_raw = 0.0
+for X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    start = time.time()
+    y_pred = model(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_raw += end - start
+print("Raw model: ", total_time_raw)
 
-np.save(f"outputs/figures/estimated_variances_{n_exp}.npy", estimated_variances)
-np.save(f"outputs/figures/actual_variances_{n_exp}.npy", actual_variances)
+total_time_uncertainty = 0.0
+for X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    start = time.time()
+    y_pred, var_pred = model_with_uncertainty(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_uncertainty += end - start
+print("Model with uncertainty: ", total_time_uncertainty)

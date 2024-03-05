@@ -39,8 +39,8 @@ def sum_squared_log(model, dataloader, device=None):
         predictions, estimated_variances = model(x)
         actual_errors.append((y-predictions)**2)
         predicted_errors.append(estimated_variances)
-    actual_errors = torch.cat(actual_errors)
-    predicted_errors = torch.cat(predicted_errors)
+    actual_errors = torch.cat(actual_errors).squeeze(1)
+    predicted_errors = torch.cat(predicted_errors).squeeze(1)
 
     sort_indices = torch.argsort(predicted_errors)
     actual_errors = actual_errors[sort_indices]

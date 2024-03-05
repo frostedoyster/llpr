@@ -44,7 +44,7 @@ train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epo
 torch.save(model.state_dict(), f"outputs/models/llpr_{dataset_name}_{seed}.pt")
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device)
+model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device, objective="nll")
 
 print("nll:", avg_nll_regression(model_with_uncertainty, test_dataloader, device, mean_y, std_y))
 print("rmse:", rmse(model_with_uncertainty, test_dataloader, device, mean_y, std_y))

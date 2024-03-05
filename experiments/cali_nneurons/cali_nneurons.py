@@ -85,8 +85,8 @@ def get_estimated_and_actual_variances(dataloader):
             y_pred, var_pred = model_with_uncertainty(X_batch)
             actual_variances.append((y_pred - y_batch) ** 2)
             estimated_variances.append(var_pred)
-    estimated_variances = torch.cat(estimated_variances, dim=0)
-    actual_variances = torch.cat(actual_variances, dim=0)
+    estimated_variances = torch.cat(estimated_variances, dim=0).squeeze(1)
+    actual_variances = torch.cat(actual_variances, dim=0).squeeze(1)
 
     estimated_variances = estimated_variances.cpu().numpy()
     actual_variances = actual_variances.cpu().numpy()
@@ -123,22 +123,31 @@ actual_variances_test_avg = np.array([np.mean(actual_variances_test[bins[i] : bi
 estimated_variances_test_avg = estimated_variances_test_avg[:-1]
 actual_variances_test_avg = actual_variances_test_avg[:-1]
 
+from llpr.utils.metrics import avg_nll_regression
+
+average_nll = avg_nll_regression(model_with_uncertainty, test_dataloader, device=device)
+print(f"Average NLL: {average_nll}")
+
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 12})
 
 min_value = min(np.min(estimated_variances_test_avg), np.min(actual_variances_test_avg))
 max_value = max(np.max(estimated_variances_test_avg), np.max(actual_variances_test_avg))
 
-plt.plot([min_value, max_value], [min_value, max_value], "k--")
+plt.plot([min_value, max_value], [min_value, max_value], "k--", label="y=x")
 print(estimated_variances_valid_avg.shape)
 print(actual_variances_valid_avg.shape)
 print(estimated_variances_test_avg.shape)
 print(actual_variances_test_avg.shape)
+
 # plt.plot(estimated_variances_valid_avg, actual_variances_valid_avg, "o")
 plt.plot(estimated_variances_test_avg, actual_variances_test_avg, "o")
-plt.fill_between([0.0, np.max(estimated_variances_test_avg)], [0.0, np.max(estimated_variances_test_avg)+n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_variances_test_avg)], [0.0, np.max(estimated_variances_test_avg)-n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_variances_test_avg)], alpha=0.3, color="tab:orange")
+plt.text(0.95, 0.05, f'avg. NLL={average_nll:.3f}', verticalalignment='bottom', horizontalalignment='right', transform=plt.gca().transAxes)
+# plt.fill_between([0.0, np.max(estimated_variances_test_avg)], [0.0, np.max(estimated_variances_test_avg)+n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_variances_test_avg)], [0.0, np.max(estimated_variances_test_avg)-n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_variances_test_avg)], alpha=0.3, color="tab:orange")
 plt.xscale("log")
 plt.yscale("log")
 plt.title(f"{n_neurons_per_layer} neurons per layer")
 plt.xlabel("Estimated variance")
 plt.ylabel("Actual variance")
-plt.savefig(f"outputs/figures/cali_{n_neurons_per_layer}.pdf")
+plt.tight_layout()
+plt.savefig(f"outputs/figures/cali_{n_neurons_per_layer}_nll.pdf")

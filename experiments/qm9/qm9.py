@@ -8,6 +8,9 @@ from qm9_llpr import UncertaintyModel
 
 print("Start")
 
+import sys
+n_exp = int(sys.argv[1])
+
 torch.set_default_dtype(torch.float64)
 torch.manual_seed(0)
 np.random.seed(0)
@@ -50,11 +53,11 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, collate_fn=collate_fn)
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, collate_fn=collate_fn)
 
-train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
+train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, n_exp, device)
 
-torch.save(model.state_dict(), "outputs/models/qm9_10000_64_manylayernorm.pt")
+torch.save(model.state_dict(), f"outputs/models/qm9_{n_exp}.pt")
 
-model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
+model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader, n_exp)
 model_with_uncertainty.optimize_hyperparameters(valid_dataloader)
 
 import tqdm
@@ -97,11 +100,17 @@ estimated_averages = np.array([np.mean(split_estimated_single) for split_estimat
 actual_averages = np.array([np.mean(split_actual_single) for split_actual_single in split_actual])
 
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 12})
+
+max_value = max(np.max(estimated_averages), np.max(actual_averages))
+min_value = min(np.min(estimated_averages), np.min(actual_averages))
+
+plt.plot([min_value, max_value], [min_value, max_value], "k--", label="y=x")
 plt.plot(estimated_averages, actual_averages, ".", markersize=4.0)
-plt.plot([0.0, np.max(estimated_averages)], [0.0, np.max(estimated_averages)], color="tab:orange", label="y=x")
 # plt.fill_between([0.0, np.max(estimated_averages)], [0.0, np.max(estimated_averages)+n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], [0.0, np.max(estimated_averages)-n_sigma*np.sqrt(2.0/n_samples_per_bin)*np.max(estimated_averages)], alpha=0.3, color="tab:orange")
 plt.xscale("log")
 plt.yscale("log")
-plt.xlabel("Predicted errors")
-plt.ylabel("Actual errors")
-plt.savefig("outputs/figures/qm9_10000_64_manylayernorm.pdf")
+plt.xlabel(r"Predicted variance $(kcal^2/mol^2)$")
+plt.ylabel(r"Actual variance $(kcal^2/mol^2)$")
+plt.tight_layout()
+plt.savefig(f"outputs/figures/qm9_{n_exp}.pdf")

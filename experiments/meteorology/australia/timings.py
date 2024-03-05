@@ -5,7 +5,7 @@ import torch
 torch.manual_seed(0)
 np.random.seed(0)
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda"
 
 data = pd.read_csv('data/weatherAUS_processed.csv')
 locations, features, targets = data['Location'], data.drop(['Location', 'NextDayMaxTemp'], axis=1), data['NextDayMaxTemp']
@@ -77,40 +77,38 @@ print(len(train_dataset))
 print(len(valid_dataset))
 print(len(test_dataset))
 
-train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True)
-valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=128, shuffle=False)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
+batch_size = 8
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-with torch.no_grad():
-    y_pred = model((l_valid.to(device), X_valid.to(device)))
-    valid_loss = torch.nn.functional.mse_loss(y_pred, y_valid.to(device))
-    print(f"Before training: Valid loss: {valid_loss:.4f}")
-
-from llpr.utils.train_tensor_inputs import train_model
-
-train_model(model, optimizer, torch.nn.functional.mse_loss, train_dataloader, valid_dataloader, 100, device)
+# we don't train: doesn't matter for timings
 
 from llpr import UncertaintyModel
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device)
+model_with_uncertainty.set_hyperparameters(0.1, 0.1)  # doesn't matter for timings
 
-# covariance = 0.0001*features_last_layer.T @ features_last_layer + 0.5 * torch.eye(features_last_layer.shape[1], device=features_last_layer.device)
+import time
+import tqdm
 
-estimated_variances = []
-actual_variances = []
-with torch.no_grad():
-    for l_batch, X_batch, y_batch in test_dataloader:
-        y_pred, y_unc = model_with_uncertainty((l_batch.to(device), X_batch.to(device)))
-        actual_variances.append((y_pred - y_batch.to(device)) ** 2)
-        estimated_variances.append(y_unc)
-estimated_variances = torch.cat(estimated_variances, dim=0).squeeze(1)
-actual_variances = torch.cat(actual_variances, dim=0).squeeze(1)
+total_time_raw = 0.0
+for l_batch, X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    l_batch, X_batch, y_batch = l_batch.to(device), X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred = model((l_batch, X_batch))
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_raw += end - start
+print("Raw model: ", total_time_raw)
 
-estimated_variances = estimated_variances.cpu().numpy()
-actual_variances = actual_variances.cpu().numpy()
-
-np.save("outputs/figures/estimated_variances.npy", estimated_variances)
-np.save("outputs/figures/actual_variances.npy", actual_variances)
+total_time_uncertainty = 0.0
+for l_batch, X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    l_batch, X_batch, y_batch = l_batch.to(device), X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred, var_pred = model_with_uncertainty((l_batch, X_batch))
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_uncertainty += end - start
+print("Model with uncertainty: ", total_time_uncertainty)

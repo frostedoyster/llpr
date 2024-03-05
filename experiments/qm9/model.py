@@ -68,15 +68,15 @@ class AtomicNNs(torch.nn.Module):
         self.all_species = all_species
         self.atomic_nns = torch.nn.ModuleDict({
             str(species): torch.nn.Sequential(
-                torch.nn.LayerNorm(n_features),
+                # torch.nn.LayerNorm(n_features),
                 torch.nn.Linear(n_features, n_neurons),
-                torch.nn.LayerNorm(n_neurons),
+                # torch.nn.LayerNorm(n_neurons),
                 activation,
                 torch.nn.Linear(n_neurons, n_neurons),
-                torch.nn.LayerNorm(n_neurons),
+                # torch.nn.LayerNorm(n_neurons),
                 activation,
                 torch.nn.Linear(n_neurons, n_neurons_last_layer),
-                torch.nn.LayerNorm(n_neurons_last_layer),
+                # torch.nn.LayerNorm(n_neurons_last_layer),
                 activation
             ) for species in all_species
         })

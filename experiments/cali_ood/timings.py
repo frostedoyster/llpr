@@ -89,53 +89,61 @@ print(len(valid_dataset))
 print(len(test_dataset))
 print(len(ood_test_dataset))
 
-train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
-valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=128, shuffle=False)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False)
-ood_test_dataloader = torch.utils.data.DataLoader(ood_test_dataset, batch_size=128, shuffle=False)
+batch_size = 8
 
-n_epochs = 400
-loss_fn = torch.nn.functional.mse_loss
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+ood_test_dataloader = torch.utils.data.DataLoader(ood_test_dataset, batch_size=batch_size, shuffle=False)
 
 from llpr import UncertaintyModel
 from llpr.utils.train_tensor_inputs import train_model
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda"
 model.to(device)
-train_model(model, optimizer, loss_fn, train_dataloader, valid_dataloader, n_epochs, device)
 
-# save
-torch.save(model.state_dict(), f"outputs/models/cali_ood.pt")
+# no training: doesn't matter for timings
 
 model_with_uncertainty = UncertaintyModel(model, model[-1], train_dataloader)
-model_with_uncertainty.optimize_hyperparameters(valid_dataloader, device=device)
+model_with_uncertainty.set_hyperparameters(0.1, 0.1)  # doesn't matter for timings
 
-def get_estimated_and_actual_variances(dataloader):
-    estimated_variances = []
-    actual_variances = []
-    with torch.no_grad():
-        for X_batch, y_batch in dataloader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            y_pred, var_pred = model_with_uncertainty(X_batch)
-            actual_variances.append((y_pred - y_batch) ** 2)
-            estimated_variances.append(var_pred)
-    estimated_variances = torch.cat(estimated_variances, dim=0).squeeze(1)
-    actual_variances = torch.cat(actual_variances, dim=0).squeeze(1)
+import time
+import tqdm
 
-    estimated_variances = estimated_variances.cpu().numpy()
-    actual_variances = actual_variances.cpu().numpy()
+total_time_raw = 0.0
+for X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred = model(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_raw += end - start
 
-    return estimated_variances, actual_variances
+for X_batch, y_batch in tqdm.tqdm(ood_test_dataloader):
+    X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred = model(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_raw += end - start
 
-estimated_variances_valid, actual_variances_valid = get_estimated_and_actual_variances(valid_dataloader)
-estimated_variances_test, actual_variances_test = get_estimated_and_actual_variances(test_dataloader)
-estimated_variances_ood, actual_variances_ood = get_estimated_and_actual_variances(ood_test_dataloader)
+print("Raw model: ", total_time_raw)
 
-np.save("outputs/figures/estimated_variances_valid.npy", estimated_variances_valid)
-np.save("outputs/figures/actual_variances_valid.npy", actual_variances_valid)
-np.save("outputs/figures/estimated_variances_test.npy", estimated_variances_test)
-np.save("outputs/figures/actual_variances_test.npy", actual_variances_test)
-np.save("outputs/figures/estimated_variances_ood.npy", estimated_variances_ood)
-np.save("outputs/figures/actual_variances_ood.npy", actual_variances_ood)
+total_time_uncertainty = 0.0
+for X_batch, y_batch in tqdm.tqdm(test_dataloader):
+    X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred, var_pred = model_with_uncertainty(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_uncertainty += end - start
 
+for X_batch, y_batch in tqdm.tqdm(ood_test_dataloader):
+    X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+    start = time.time()
+    y_pred, var_pred = model_with_uncertainty(X_batch)
+    torch.cuda.synchronize()
+    end = time.time()
+    total_time_uncertainty += end - start
+
+print("Model with uncertainty: ", total_time_uncertainty)

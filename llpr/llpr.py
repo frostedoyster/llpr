@@ -75,9 +75,8 @@ class UncertaintyModel(torch.nn.Module):
         prediction, hidden_features = self.model(x)
         if self.last_layer_has_bias:
             hidden_features = torch.cat((hidden_features, torch.ones_like(hidden_features[:, :1])), dim=1)
-        # Using torch.linalg.solve:
-        # uncertainty = (torch.linalg.solve(self.covariance, hidden_features.T).T * hidden_features).sum(dim=1, keepdim=True)
         uncertainty = torch.einsum("ij, jk, ik -> i", hidden_features, self.inv_covariance, hidden_features)
+        uncertainty = uncertainty.unsqueeze(1)
         
         return prediction, uncertainty
 

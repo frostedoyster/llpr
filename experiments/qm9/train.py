@@ -8,7 +8,9 @@ import numpy as np
 import copy
 
 
-def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataloader, n_epochs, device):
+def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataloader, n_epochs, exponent, device):
+
+    exponent = exponent / 2.0
 
     def evaluate_loss(model, dataloader):
         with torch.no_grad():
@@ -17,6 +19,9 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
                 X_batch, y_batch = batch
                 # X_batch, y_batch = X_batch.to(device), y_batch.to(device)
                 y_pred_batch = model(X_batch)
+                n_atoms = torch.tensor([len(structures.positions) for structures in X_batch], device=device).unsqueeze(1)
+                y_batch = y_batch / (n_atoms**exponent)
+                y_pred_batch = y_pred_batch / (n_atoms**exponent)
                 y_pred.append(y_pred_batch)
                 y_actual.append(y_batch)
             y_pred = torch.cat(y_pred)
@@ -42,6 +47,9 @@ def train_model(model, optimizer, loss_fn, train_dataloader, validation_dataload
             X_batch, y_batch = batch
             # X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             y_pred = model(X_batch)
+            n_atoms = torch.tensor([len(structures.positions) for structures in X_batch], device=device).unsqueeze(1)
+            y_batch = y_batch / (n_atoms**exponent)
+            y_pred = y_pred / (n_atoms**exponent)
             loss = loss_fn(y_pred, y_batch)
             loss.backward()
             optimizer.step()
